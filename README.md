@@ -9,7 +9,7 @@ Project page (code, examples, videos): https://amitedenzon.github.io/
 
 ## 🔥 Highlights
 
-- **Training-free / inference-time only**: no retraining, no fine-tuning, no model edits.
+- **Inference-time only**: no retraining, no fine-tuning, no model edits.
 - **Latent-space token stability**: detects drift via latent summaries and prunes the most unstable tokens.
 - **Works with autoregressive long-video inference**:
   - Rolling Forcing
@@ -38,11 +38,12 @@ For full details, see the paper and project page: https://amitedenzon.github.io/
 
 This repository provides code for TokenTrim integrated into:
 - **Wan2.1-1.3B** text-to-video backbone
-- **Rolling Forcing** and **Self Forcing** autoregressive inference
+- Autoregressive long-video inference pipelines:
+  - **Rolling Forcing** — official repo: https://github.com/TencentARC/RollingForcing
+  - **Self Forcing** — official repo: https://github.com/guandeh17/Self-Forcing
 
 > Note: exact configs, prompts, and qualitative results are curated on the project page:  
 > https://amitedenzon.github.io/
-
 ---
 
 ## ⚙️ Installation
@@ -53,3 +54,11 @@ We recommend Python 3.10+.
 ```bash
 conda create -n tokentrim python=3.10 -y
 conda activate tokentrim
+
+## 🙏 Acknowledgments
+
+TokenTrim builds on autoregressive long-video generation frameworks, including:
+- Rolling Forcing: https://github.com/TencentARC/RollingForcing  
+- Self Forcing: https://github.com/guandeh17/Self-Forcing  
+
+More details and examples: https://amitedenzon.github.io/
