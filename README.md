@@ -7,6 +7,29 @@ Project page (code, examples, videos): https://amitedenzon.github.io/
 
 ---
 
+<h2>Qualitative Results</h2>
+
+<p><b>Prompt:</b> A humanoid appears out of smoke, then disperses and reforms.</p>
+
+<div style="display:flex; gap:20px; justify-content:center;">
+  <div>
+    <p align="center"><b>Rolling Forcing</b></p>
+    <video width="320" controls>
+      <source src="assets/videos/smoke_rolling.mp4" type="video/mp4">
+    </video>
+  </div>
+
+  <div>
+    <p align="center"><b>+ TokenTrim</b></p>
+    <video width="320" controls>
+      <source src="assets/videos/smoke_ours.mp4" type="video/mp4">
+    </video>
+  </div>
+</div>
+
+
+---
+
 ## 🔥 Highlights
 
 - **Inference-time only**: no retraining, no fine-tuning, no model edits.
@@ -23,7 +46,7 @@ Project page (code, examples, videos): https://amitedenzon.github.io/
 TokenTrim identifies unstable latent tokens during autoregressive video generation and removes them from the temporal KV cache to prevent error propagation.
 
 <p align="center">
-  <img src="assets/fig_smoke_dif.png" width="800">
+  <img src="assets/fig_smoke_dif.jpg" width="800">
 </p>
 
 **Figure:** TokenTrim overview at autoregressive step *t*.  
