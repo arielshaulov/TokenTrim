@@ -18,19 +18,17 @@ Project page (code, examples, videos): https://amitedenzon.github.io/
 
 ---
 
-## 📌 Method Overview
+## 🧠 Method Overview
 
-Autoregressive long video generation commonly reuses previously generated content through a temporal KV cache.  
-When corruption appears in earlier chunks, it can be **reused repeatedly**, amplifying errors and causing long-horizon drift.
+TokenTrim identifies unstable latent tokens during autoregressive video generation and removes them from the temporal KV cache to prevent error propagation.
 
-TokenTrim introduces a simple control mechanism:
+<p align="center">
+  <img src="assets/fig_smoke_dif.png" width="800">
+</p>
 
-1. Compute latent summaries for consecutive generated batches.
-2. Estimate per-token drift and define an unstable token set.
-3. If drift is abnormal (relative to running statistics), **prune** unstable tokens from the KV cache.
-4. Regenerate the current batch conditioned on the pruned cache (bounded to a small number of attempts).
-
-For full details, see the paper and project page: https://amitedenzon.github.io/
+**Figure:** TokenTrim overview at autoregressive step *t*.  
+(a) Latent summaries are computed for the previous batch and the candidate batch, and per-token drift is estimated by their difference. Tokens with the largest drift values form the unstable set.  
+(b) If the drift severity exceeds an adaptive threshold, unstable tokens are masked in the temporal KV cache and the batch is regenerated using the pruned cache; otherwise, the batch is accepted and the cache is updated normally.
 
 ---
 
