@@ -55,7 +55,7 @@ Project page (code, examples, videos): https://amitedenzon.github.io/
 
 <div style="display:flex; gap:20px; justify-content:center;">
   <div>
-    <p align="center"><b>Self Forcing</b></p>
+    <p align="center"><b>+ Flowmo</b></p>
     <video width="320" controls>
       <source src="assets/videos/dragon1_flowmo.mp4" type="video/mp4">
     </video>
