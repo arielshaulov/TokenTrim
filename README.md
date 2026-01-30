@@ -96,6 +96,14 @@ TokenTrim identifies unstable latent tokens during autoregressive video generati
 
 ---
 
+## ✅ Release Checklist
+
+- [ ] Release code for **Rolling Forcing** + **TokenTrim** integration  
+- [ ] Release code for **Self Forcing** + **TokenTrim** integration  
+- [ ] Release code for **FlowMo comparison** (scripts + configs + prompts)
+
+---
+
 ## 🧩 Supported Models / Pipelines
 
 This repository provides code for TokenTrim integrated into:
