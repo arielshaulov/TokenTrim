@@ -28,6 +28,47 @@ Project page (code, examples, videos): https://amitedenzon.github.io/
 </div>
 
 
+
+<p><b>Prompt:</b> A young girl skips down a quiet suburban street lined with trees.</p>
+
+<div style="display:flex; gap:20px; justify-content:center;">
+  <div>
+    <p align="center"><b>Self Forcing</b></p>
+    <video width="320" controls>
+      <source src="assets/videos/girl_walking_self.mp4" type="video/mp4">
+    </video>
+  </div>
+
+  <div>
+    <p align="center"><b>+ TokenTrim</b></p>
+    <video width="320" controls>
+      <source src="assets/videos/girl_walking_self.mp4" type="video/mp4">
+    </video>
+  </div>
+</div>
+
+
+
+
+
+<p><b>Prompt:</b> Antares in full dragon form towering over a burning battlefield.</p>
+
+<div style="display:flex; gap:20px; justify-content:center;">
+  <div>
+    <p align="center"><b>Self Forcing</b></p>
+    <video width="320" controls>
+      <source src="assets/videos/dragon1_flowmo.mp4" type="video/mp4">
+    </video>
+  </div>
+
+  <div>
+    <p align="center"><b>+ TokenTrim</b></p>
+    <video width="320" controls>
+      <source src="assets/videos/dragon1_ours.mp4" type="video/mp4">
+    </video>
+  </div>
+</div>
+
 ---
 
 ## 🔥 Highlights
