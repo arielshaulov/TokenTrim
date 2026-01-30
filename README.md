@@ -9,7 +9,7 @@ Project page (code, examples, videos): https://amitedenzon.github.io/
 
 ## 🔥 Highlights
 
-- **Inference-time only**: no retraining, no fine-tuning, no model edits.
+- **Training-free / inference-time only**: no retraining, no fine-tuning, no model edits.
 - **Latent-space token stability**: detects drift via latent summaries and prunes the most unstable tokens.
 - **Works with autoregressive long-video inference**:
   - Rolling Forcing
@@ -46,14 +46,6 @@ This repository provides code for TokenTrim integrated into:
 > https://amitedenzon.github.io/
 ---
 
-## ⚙️ Installation
-
-### 1) Create environment
-We recommend Python 3.10+.
-
-```bash
-conda create -n tokentrim python=3.10 -y
-conda activate tokentrim
 
 ## 🙏 Acknowledgments
 
