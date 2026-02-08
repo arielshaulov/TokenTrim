@@ -1,7 +1,8 @@
 # TokenTrim: Inference-Time Token Pruning for Autoregressive Long Video Generation
 
 <p align="center">
-  <a href="https://arielshaulov.github.io/TokenTrim/">Project Page</a>
+  <a href="https://arielshaulov.github.io/TokenTrim/"><img src="https://img.shields.io/badge/Project-Page-blue" alt="Project Page"></a>
+  <a href="https://arxiv.org/abs/2602.00268"><img src="https://img.shields.io/badge/arXiv-2602.00268-b31b1b" alt="arXiv"></a>
 </p>
 
 **TokenTrim** is an inference-time method for stabilizing long-horizon autoregressive text-to-video generation. It mitigates temporal drift by identifying unstable latent tokens and **hard-pruning** them from the temporal KV cache before reuse, preventing error propagation across rollout steps.
@@ -99,3 +100,18 @@ TokenTrim builds on autoregressive long-video generation frameworks, including:
 - [Self Forcing](https://github.com/guandeh17/Self-Forcing)
 
 For more details, examples, and videos, visit the [project page](https://arielshaulov.github.io/TokenTrim/).
+
+---
+
+## Citation
+
+If you find TokenTrim useful in your research, please cite our paper:
+
+```bibtex
+@article{shaulov2026tokentrim,
+  title={TokenTrim: Inference-Time Token Pruning for Autoregressive Long Video Generation},
+  author={Shaulov, Ariel and Shaar, Eitan and Edenzon, Amit and Wolf, Lior},
+  journal={arXiv preprint arXiv:2602.00268},
+  year={2026}
+}
+```
