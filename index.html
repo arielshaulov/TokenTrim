@@ -1,0 +1,1734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token Trim: Inference-Time Token Pruning</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
+
+    <!-- MathJax Configuration -->
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [['$', '$'], ['\\(', '\\)']]
+        }
+      };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <style>
+        :root {
+            /* Palette: Precision Engineering */
+            --primary-text: #0f172a;       /* Slate 900 */
+            --secondary-text: #475569;     /* Slate 600 */
+            --accent-orange: #FF5722;      /* International Orange */
+            --accent-orange-hover: #E64A19;
+            --bg-color: #ffffff;
+            --grid-line: #edf1f6;          /* Slate 200 */
+            --panel-bg: #ffffff;
+            --terminal-bg: #f1f5f9;        /* Slate 100 */
+            --border-color: #cbd5e1;       /* Slate 300 */
+            
+            /* Shadows & Radius */
+            --shadow-soft: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            --shadow-lifted: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.01);
+            --radius-sm: 6px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--primary-text);
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            
+            /* Technical Grid Background */
+            background-image: 
+                linear-gradient(var(--grid-line) 1px, transparent 1px), 
+                linear-gradient(to right, var(--grid-line) 1px, transparent 1px);
+            background-size: 40px 40px;
+            background-position: center top;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* Overlay to fade grid at bottom */
+        body::after {
+            content: "";
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 100px;
+            background: linear-gradient(to top, var(--bg-color), transparent);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* --- Custom Scrollbar (Overlay look) --- */
+        ::-webkit-scrollbar {
+            width: 8px;
+            background: transparent; /* Makes track transparent */
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background-color: rgba(15, 23, 42, 0.3);
+            border-radius: 4px;
+            border: 2px solid transparent; /* padding around thumb */
+            background-clip: content-box;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(15, 23, 42, 0.6);
+        }
+
+        .container {
+            max-width: 900px; /* Reduced to make videos smaller */
+            margin: 0 auto;
+            padding: 30px 20px; /* Reduced padding */
+        }
+
+        /* --- Header Section --- */
+        header {
+            text-align: center;
+            margin-bottom: 40px; /* Reduced from 70px */
+            position: relative;
+        }
+
+        h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            color: var(--primary-text);
+            margin-bottom: 15px;
+            line-height: 1.1;
+        }
+
+        .authors {
+            font-family: 'Plus Jakarta Sans', sans-serif; /* Switch to main font for names */
+            font-size: 1.1rem;
+            color: var(--primary-text);
+            background: transparent;
+            display: block;
+            padding: 0;
+            border: none;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .author-name {
+            display: inline-block;
+            margin: 0 4px;
+        }
+        
+        .author-name a {
+            color: inherit;
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        .author-name a:hover {
+            color: var(--accent-orange);
+            text-decoration: underline;
+        }
+
+        .affiliations {
+            font-family: 'JetBrains Mono', monospace; /* Keep mono for affils */
+            font-size: 0.9rem;
+            color: var(--secondary-text);
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .affiliation {
+            display: inline-block;
+        }
+
+        .links {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 25px;
+        }
+
+        .btn {
+            background-color: white;
+            color: var(--primary-text);
+            padding: 10px 24px;
+            border-radius: 999px; /* Pill shape */
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .btn:hover {
+            background-color: var(--primary-text);
+            color: white;
+            border-color: var(--primary-text);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        /* --- Internal Navigation --- */
+        /* --- Internal Navigation (Floating Right) --- */
+        .internal-nav {
+            position: fixed;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 0;
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            z-index: 9; /* Behind hero (z=10), visible when scrolling past */
+        }
+
+        .nav-link {
+            text-decoration: none;
+            color: var(--secondary-text);
+            font-weight: 600;
+            font-size: 0.9rem;
+            padding: 10px 20px;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md); /* Pill/Rounded Rectangle */
+            box-shadow: var(--shadow-soft);
+            transition: all 0.2s ease;
+            text-align: center; /* Centered text */
+            white-space: nowrap;
+        }
+
+        .nav-link:hover {
+            color: white;
+            background: var(--accent-orange);
+            border-color: var(--accent-orange);
+            transform: translateX(-5px); /* Slide left slightly on hover */
+            box-shadow: 0 4px 12px rgba(255, 87, 34, 0.3);
+        }
+        
+        /* Remove old underline styles */
+        .nav-link::after { content: none; }
+
+        /* Mobile Override: Revert to static inline */
+        @media (max-width: 900px) {
+            .internal-nav {
+                position: static;
+                transform: none;
+                flex-direction: row;
+                justify-content: center;
+                flex-wrap: wrap;
+                width: fit-content;
+                margin: 35px auto;
+                background: #f8fafc;
+                border: 1px solid var(--border-color);
+                box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+                padding: 6px;
+                z-index: 1;
+            }
+
+            .nav-link {
+                background: transparent;
+                border: none;
+                box-shadow: none;
+                border-radius: 999px;
+                padding: 8px 24px;
+                text-align: center;
+            }
+            
+            .nav-link:hover {
+                transform: none;
+                background: var(--accent-orange);
+            }
+        }
+
+        /* --- Abstract Section (Technical Card) --- */
+        .abstract-section {
+            background-color: white;
+            padding: 30px; /* Reduced from 40px */
+            border-radius: var(--radius-lg);
+            margin-bottom: 50px; /* Reduced from 80px */
+            text-align: justify;
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+            
+            /* Card Styling */
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-soft);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Decorative "Tech Spec" Orange Top Bar */
+        .abstract-section::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--accent-orange);
+        }
+
+        .abstract-section h2 {
+            text-align: left;
+            margin-top: 0;
+            font-size: 1.2rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--secondary-text);
+            font-weight: 700;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .abstract-section h2::after {
+            content: "";
+            flex-grow: 1;
+            height: 1px;
+            background: var(--grid-line);
+        }
+
+        .abstract-section p {
+            color: var(--secondary-text);
+            font-size: 1.05rem;
+            line-height: 1.75;
+        }
+
+
+        /* --- Method Section --- */
+        .method-section {
+            background-color: white;
+            padding: 30px;
+            border-radius: var(--radius-lg);
+            margin-bottom: 50px;
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-soft);
+            position: relative; /* For top bar */
+            overflow: hidden;
+        }
+
+        /* Decorative "Tech Spec" Orange Top Bar (Matched to Abstract) */
+        .method-section::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--accent-orange);
+        }
+
+        .method-section h2 {
+            text-align: left;
+            margin-top: 0;
+            font-size: 1.2rem; /* Matched to Abstract */
+            text-transform: uppercase; /* Matched to Abstract */
+            letter-spacing: 0.05em; /* Matched to Abstract */
+            color: var(--secondary-text); /* Matched to Abstract */
+            font-weight: 700;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .method-section h2::after {
+            content: "";
+            flex-grow: 1;
+            height: 1px;
+            background: var(--grid-line);
+        }
+
+        .method-figure {
+            width: 100%;
+            height: auto; /* Allow image to define height */
+            margin-bottom: 30px;
+            /* Remove border and background for seamless integration */
+            overflow: hidden;
+        }
+        
+        .method-img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .method-text {
+            color: var(--secondary-text);
+            font-size: 1.05rem;
+            line-height: 1.75;
+            background: var(--terminal-bg);
+            padding: 20px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+        }
+
+        .method-text h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+            color: var(--primary-text);
+        }
+
+        /* --- Results Section Styling --- */
+        .results-section {
+            margin-bottom: 50px; /* Reduced from 100px */
+        }
+
+        .section-title {
+            font-size: 1.5rem; /* Reduced from 1.8rem */
+            text-align: left;
+            font-weight: 700;
+            color: var(--primary-text);
+            margin-bottom: 15px; /* Reduced from 25px */
+            padding-bottom: 0; /* Removed padding for border */
+            border-bottom: none; /* Removed line to fit grid bg */
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        /* Badge Styling for 90s */
+        .badge-long {
+            background-color: var(--primary-text);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-family: 'JetBrains Mono', monospace;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            vertical-align: middle;
+            margin-left: auto; /* Push to right */
+        }
+
+        /* --- Carousel Component --- */
+        .carousel-wrapper {
+            position: relative;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 10px; /* Reduced from 15px */
+            box-shadow: var(--shadow-lifted);
+        }
+
+        /* Grid Layout for Combined Baselines */
+        .combined-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 5px; /* Reduced from 10px */
+            margin-bottom: 0;
+        }
+
+        .baseline-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .baseline-header {
+            display: none; /* Hide old header, we use labels */
+        }
+
+        .video-stack {
+            display: flex;
+            flex-direction: row;
+            gap: 10px; /* Reduced from 15px */
+            margin-bottom: 2px; /* Tighter */
+        }
+
+        /* The Viewport Container */
+        .video-container {
+            position: relative;
+            width: calc(50% - 8px); /* Ensure it fits with gap */
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            background: #000;
+            border: 1px solid rgba(0,0,0,0.1);
+            aspect-ratio: 16 / 9; /* Fix aspect ratio */
+            min-height: 150px; /* Fallback height */
+            
+            /* Monitor Effect */
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        video {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100.5%; /* Slight overlap to prevent gaps */
+            height: 100.5%;
+            object-fit: cover;
+            display: block;
+        }
+
+        /* Technical Label Styles */
+        .video-label {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background: rgba(15, 23, 42, 0.9); /* Dark Slate */
+            color: white;
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            font-weight: 500;
+            z-index: 2;
+            letter-spacing: 0.05em;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        /* Custom Video Controls */
+        .custom-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0));
+            padding: 10px 15px 15px; /* Added bottom padding */
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 5;
+        }
+
+        .video-container:hover .custom-controls {
+            opacity: 1;
+        }
+
+        .play-pause-btn {
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 1rem;
+            cursor: pointer;
+            padding: 0;
+            width: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.9;
+            transition: opacity 0.2s;
+        }
+
+        .play-pause-btn:hover {
+            opacity: 1;
+        }
+
+        .progress-bar-bg {
+            flex-grow: 1;
+            height: 4px; /* Thin line */
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+            cursor: pointer;
+            position: relative;
+            transition: height 0.1s;
+        }
+        
+        /* Make progress bar easier to hit on hover */
+        .progress-bar-bg:hover {
+            height: 6px; 
+        }
+
+        .progress-bar-fill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 0%;
+            background-color: #FF5722 !important; /* Force orange fill */
+            border-radius: 2px;
+            z-index: 2;
+        }
+
+        .progress-handle {
+            position: absolute;
+            top: 50%;
+            right: -6px; /* Center handle on end of fill */
+            width: 12px;
+            height: 12px;
+            background: white;
+            border-radius: 50%;
+            transform: translateY(-50%) scale(0);
+            transition: transform 0.1s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            z-index: 3;
+            pointer-events: none; /* Let clicks pass to bg */
+        }
+        
+        .progress-bar-bg:hover .progress-handle {
+            transform: translateY(-50%) scale(1);
+        }
+
+        .progress-hover {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 0%;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .time-tooltip {
+            position: absolute;
+            bottom: 15px;
+            left: 0;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-family: 'JetBrains Mono', monospace;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            white-space: nowrap;
+        }
+
+        .progress-bar-bg:hover .time-tooltip {
+            opacity: 1;
+        }
+
+        /* TokenTrim Highlight Label */
+        .label-ours {
+            background: var(--accent-orange);
+            color: white;
+            font-weight: 700;
+            box-shadow: 0 4px 10px rgba(255, 87, 34, 0.4);
+            border: none;
+        }
+
+        /* --- Prompt Box (Terminal Style) --- */
+        .prompt-box {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem; 
+            font-style: normal; /* Remove italic */
+            text-align: center; /* Keep centering per logic, but look like code */
+            color: var(--secondary-text);
+            
+            background-color: var(--terminal-bg);
+            border: 1px solid var(--border-color);
+            padding: 8px 12px; /* Tighter padding */
+            border-radius: var(--radius-sm);
+            margin-bottom: 5px;
+            
+            /* Add left accent */
+            border-left: 4px solid var(--accent-orange);
+            
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 2.5em; /* Reduced height */
+            line-height: 1.3;
+        }
+        
+        /* Terminal "Prompt" Decoration */
+        .prompt-box::before {
+            content: ">";
+            color: var(--accent-orange);
+            margin-right: 8px; /* Tighter spacing */
+            font-weight: 700;
+        }
+
+        /* --- Controls Bar --- */
+        .controls-bar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 16px; /* Reduced from 24px */
+            margin: 0; /* Removed margin */
+            padding: 4px;
+            border-top: 1px dashed var(--grid-line);
+            border-bottom: 1px dashed var(--grid-line);
+        }
+
+        .nav-btn {
+            position: static; /* Reset absolute */
+            background: white;
+            border: 1px solid var(--border-color);
+            color: var(--primary-text);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--shadow-soft);
+            flex-shrink: 0;
+        }
+
+        .nav-btn:hover {
+            background: var(--accent-orange);
+            color: white;
+            border-color: var(--accent-orange);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 87, 34, 0.3);
+        }
+
+        /* Remove old absolute classes if any remain, or just ignore them */
+        .nav-btn.prev, .nav-btn.next { left: auto; right: auto; transform: none; }
+        .nav-btn.prev:hover, .nav-btn.next:hover { transform: translateY(-2px); }
+
+        .dots {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 4px; /* Pill radius */
+            background-color: var(--border-color);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .dot.active {
+            background-color: var(--accent-orange);
+            width: 32px; /* Stretch into pill */
+        }
+        
+        .dot:hover:not(.active) {
+            background-color: #94a3b8;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            margin-top: 80px;
+            padding-top: 40px;
+            border-top: 1px solid var(--border-color);
+            color: var(--secondary-text);
+            font-size: 0.85rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* --- Responsive Tweaks --- */
+        @media (max-width: 900px) {
+            .nav-btn.prev { left: 10px; }
+            .nav-btn.next { right: 10px; }
+            .carousel-wrapper { padding: 20px; }
+        }
+        
+        @media (max-width: 768px) {
+            h1 { font-size: 2rem; }
+            .video-stack { flex-direction: column; }
+            .video-container { width: 100%; margin-bottom: 10px; }
+            .combined-grid { gap: 30px; }
+            .prompt-box { font-size: 0.8rem; text-align: left; justify-content: flex-start; }
+        }
+        /* --- Hero Grid --- */
+        .hero-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+            background: #000;
+            position: relative;
+            z-index: 10;
+        }
+
+        .hero-cell {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .hero-cell video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: opacity 0.4s ease;
+            opacity: 1;
+            filter: brightness(1.0);
+        }
+
+        .hero-cell:hover video {
+            opacity: 0.4;
+            filter: brightness(0.7) blur(2px);
+        }
+
+        .hero-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box; /* Fix for centering offset */
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .hero-cell:hover .hero-overlay {
+            opacity: 1;
+        }
+
+        .hero-prompt {
+            font-family: 'Plus Jakarta Sans', sans-serif; /* Match abstract font */
+            color: white;
+            font-size: 1.25rem; /* Larger, more impactful */
+            font-weight: 700;
+            text-align: center;
+            background: transparent; /* Remove box */
+            padding: 0;
+            border-radius: 0;
+            border: none;
+            backdrop-filter: none;
+            max-width: 80%;
+            box-shadow: none;
+            line-height: 1.3;
+            text-shadow: 0 4px 12px rgba(0,0,0,0.8); /* Float effect */
+            letter-spacing: -0.02em;
+        }
+
+
+        .hero-title {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 20;
+            color: white;
+            font-size: 8rem;
+            font-weight: 800;
+            letter-spacing: -0.05em;
+            pointer-events: none;
+            text-shadow: 0 20px 60px rgba(0,0,0,0.9); /* Darker shadow */
+            text-align: center;
+            line-height: 1;
+            width: 100%;
+        }
+
+
+        /* Disable prompt on hover for the 2 middle images (indices 6 and 7 in 1-based nth-child) */
+        .hero-cell:nth-child(7) .hero-overlay,
+        .hero-cell:nth-child(8) .hero-overlay {
+            display: none !important;
+        }
+
+        /* Always apply "hover" effect (dim & blur) to middle cells for Title Contrast */
+        .hero-cell:nth-child(7) video,
+        .hero-cell:nth-child(8) video {
+            opacity: 0.7;
+            filter: brightness(0.8) blur(1px);
+        }
+
+        /* --- FlowMo Layout Refinement --- */
+        .layout-row-flowmo {
+            position: relative; /* Anchor for absolute label */
+            display: block; /* Default block layout */
+            margin-bottom: 20px;
+        }
+
+        .side-label-col {
+            position: absolute;
+            right: 100%; /* Push to the left of the container */
+            top: 50%;
+            transform: translateY(-50%);
+            width: 140px;
+            text-align: right;
+            border-right: 1px solid var(--grid-line);
+            padding-right: 20px;
+            margin-right: 20px; /* Gap between label and content */
+        }
+
+        .side-label-text {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--primary-text);
+            line-height: 1.2;
+            display: block;
+        }
+
+        .content-col {
+            width: 100%; /* Ensure full width */
+        }
+        
+        @media (max-width: 768px) {
+            .layout-row-flowmo {
+                margin-bottom: 40px; /* More space when stacked */
+            }
+            .side-label-col {
+                position: relative;
+                right: auto;
+                top: auto;
+                transform: none;
+                width: 100%;
+                text-align: left;
+                border-right: none;
+                padding-right: 0;
+                margin-right: 0;
+                border-bottom: 1px solid var(--grid-line);
+                padding-bottom: 10px;
+                margin-bottom: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div id="hero-grid" class="hero-grid">
+    <div class="hero-title">TokenTrim</div>
+</div>
+
+<div class="container">
+
+    <header id="home">
+        <h1>TokenTrim: Inference-Time Token Pruning for Autoregressive Long Video Generation</h1>
+        <div class="authors-container">
+            <div class="authors">
+                <span class="author-name"><a href="https://scholar.google.com/citations?user=A31XmP0AAAAJ&hl=iw&oi=sra" target="_blank">Ariel Shaulov</a><sup>1</sup></span>
+                <span class="author-name"><a href="https://scholar.google.com/citations?hl=iw&user=9o4q_M8AAAAJ" target="_blank">Eitan Shaar</a><sup>2</sup></span>
+                <span class="author-name"><a href="https://www.linkedin.com/in/amit-edenzon/" target="_blank">Amit Edenzon</a><sup>3</sup></span>
+                <span class="author-name"><a href="https://www.cs.tau.ac.il/~wolf/" target="_blank">Lior Wolf</a><sup>1</sup></span>
+            </div>
+            <div class="affiliations">
+                <span class="affiliation"><sup>1</sup>Tel Aviv University</span>
+                <span class="affiliation"><sup>2</sup>Independent Researcher</span>
+                <span class="affiliation"><sup>3</sup>Bar Ilan University</span>
+            </div>
+        </div>
+        <div class="links">
+            <a href="#" class="btn">Paper (PDF)</a>
+            <a href="#" class="btn">Code (GitHub)</a>
+            <a href="#" class="btn">BibTeX</a>
+        </div>
+    </header>
+    <section class="abstract-section" id="sec-abstract">
+        <h2>Abstract</h2>
+        <p>
+            Auto-regressive video generation enables long video synthesis by iteratively conditioning each new batch of frames on previously generated content. However, recent work has shown that such pipelines suffer from severe temporal drift, where errors accumulate and amplify over long horizons. We hypothesize that this drift does not primarily stem from insufficient model capacity, but rather from inference-time error propagation. Specifically, we contend that drift arises from the uncontrolled reuse of corrupted latent conditioning tokens during auto-regressive inference. To correct this accumulation of errors, we propose a simple, inference-time method that mitigates temporal drift by identifying and removing unstable latent tokens before they are reused for conditioning. For this purpose, we define unstable tokens as latent tokens whose representations deviate significantly from those of the previously generated batch, indicating potential corruption or semantic drift. By explicitly removing corrupted latent tokens from the auto-regressive context, rather than modifying entire spatial regions or model parameters, our method prevents unreliable latent information from influencing future generation steps. As a result, it significantly improves long-horizon temporal consistency without modifying the model architecture, training procedure, or leaving latent space.
+        </p>
+    </section>
+    <nav class="internal-nav">
+            <a href="#home" class="nav-link">Home</a>
+            <a href="#sec-abstract" class="nav-link">Abstract</a>
+            <a href="#sec-method" class="nav-link">Method</a>
+            <a href="#sec-30s" class="nav-link">30s Video Generations</a>
+            <a href="#sec-90s" class="nav-link">90s Video Generations</a>
+            <a href="#sec-flowmo" class="nav-link">FlowMo vs TokenTrim</a>
+    </nav>
+    
+    <section class="method-section" id="sec-method">
+        <h2>Method</h2>
+        <div class="method-figure">
+            <img src="method/fig_smoke_dif.png" alt="Method Formulation Figure" class="method-img" />
+        </div>
+        <div class="method-text">
+            <p>
+                <b>TokenTrim overview at autoregressive step $t$.</b><br>
+                <b>(a)</b> Given the candidate batch $\mathcal{X}_t$ and the previous batch $\mathcal{X}_{t-1}$, we encode each frame and form latent summaries
+                $Z_t$ and $Z_{t-1}$ by averaging latents over the $F$ frames in each batch.
+                We compute per-token drift $d_i=\lVert Z_t(i)-Z_{t-1}(i)\rVert_2$ and select the top-$pN$ largest drifts to form the unstable set $S_t$,
+                from which we compute the drift severity $D_t$.<br>
+                <b>(b)</b> We compare $D_t$ to the adaptive threshold $\mu_t+\lambda\sigma_t$.
+                If $D_t \le \mu_t+\lambda\sigma_t$, the KV cache $(K,V)$ is left unchanged and the batch is accepted.
+                Otherwise, we mask the selected token positions in the temporal KV cache to obtain $(\tilde{K},\tilde{V})$ and regenerate the current batch conditioned on the pruned cache.
+                Running statistics and the cache are updated using the accepted batch $\mathcal{X}_t^{\star}$.
+            </p>
+        </div>
+    </section>
+    <section class="results-section" id="sec-30s">
+        <h2 class="section-title">30s Video Generation Comparison</h2>
+
+        <div class="carousel-wrapper" id="carousel-30s">
+            <div class="combined-grid">
+                <div class="baseline-group">
+                    <div class="video-stack">
+                        <div class="video-container">
+                            <div class="video-label">RollingForcing</div>
+                            <video id="vid-30s-rolling-base" playsinline loop muted autoplay></video>
+                            <div class="custom-controls">
+                                <button class="play-pause-btn" data-target="vid-30s-rolling-base">❚❚</button>
+                                <div class="progress-bar-bg" data-target="vid-30s-rolling-base">
+                                    <div class="progress-hover"></div>
+                                    <div class="progress-bar-fill">
+                                        <div class="progress-handle"></div>
+                                    </div>
+                                    <div class="time-tooltip">00:00</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="video-container">
+                            <div class="video-label label-ours">+ TokenTrim</div>
+                            <video id="vid-30s-rolling-ours" playsinline loop muted autoplay></video>
+                            <div class="custom-controls">
+                                <button class="play-pause-btn" data-target="vid-30s-rolling-ours">❚❚</button>
+                                <div class="progress-bar-bg" data-target="vid-30s-rolling-ours">
+                                    <div class="progress-hover"></div>
+                                    <div class="progress-bar-fill">
+                                        <div class="progress-handle"></div>
+                                    </div>
+                                    <div class="time-tooltip">00:00</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="prompt-box" id="prompt-30s-rolling">Loading prompt...</div>
+                </div>
+
+                <!-- Controls Bar -->
+                <div class="controls-bar">
+                    <button class="nav-btn prev" onclick="changeSlide('30s', -1)">&#10094;</button>
+                    <div class="dots" id="dots-30s"></div>
+                    <button class="nav-btn next" onclick="changeSlide('30s', 1)">&#10095;</button>
+                </div>
+
+                <div class="baseline-group">
+                    <div class="video-stack">
+                        <div class="video-container">
+                            <div class="video-label">SelfForcing</div>
+                            <video id="vid-30s-self-base" playsinline loop muted autoplay></video>
+                            <div class="custom-controls">
+                                <button class="play-pause-btn" data-target="vid-30s-self-base">❚❚</button>
+                                <div class="progress-bar-bg" data-target="vid-30s-self-base">
+                                    <div class="progress-hover"></div>
+                                    <div class="progress-bar-fill">
+                                        <div class="progress-handle"></div>
+                                    </div>
+                                    <div class="time-tooltip">00:00</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="video-container">
+                            <div class="video-label label-ours">+ TokenTrim</div>
+                            <video id="vid-30s-self-ours" playsinline loop muted autoplay></video>
+                            <div class="custom-controls">
+                                <button class="play-pause-btn" data-target="vid-30s-self-ours">❚❚</button>
+                                <div class="progress-bar-bg" data-target="vid-30s-self-ours">
+                                    <div class="progress-hover"></div>
+                                    <div class="progress-bar-fill">
+                                        <div class="progress-handle"></div>
+                                    </div>
+                                    <div class="time-tooltip">00:00</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="prompt-box" id="prompt-30s-self">Loading prompt...</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="results-section" id="sec-90s">
+        <h2 class="section-title">90s Video Generation Comparison<span class="badge-long">Long Horizon</span></h2>
+
+        <div class="carousel-wrapper" id="carousel-90s">
+            <div class="combined-grid">
+                <div class="baseline-group">
+                    <div class="video-stack">
+                        <div class="video-container">
+                            <div class="video-label">RollingForcing</div>
+                            <video id="vid-90s-rolling-base" playsinline loop muted autoplay></video>
+                            <div class="custom-controls">
+                                <button class="play-pause-btn" data-target="vid-90s-rolling-base">❚❚</button>
+                                <div class="progress-bar-bg" data-target="vid-90s-rolling-base">
+                                    <div class="progress-hover"></div>
+                                    <div class="progress-bar-fill">
+                                        <div class="progress-handle"></div>
+                                    </div>
+                                    <div class="time-tooltip">00:00</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="video-container">
+                            <div class="video-label label-ours">+ TokenTrim</div>
+                            <video id="vid-90s-rolling-ours" playsinline loop muted autoplay></video>
+                            <div class="custom-controls">
+                                <button class="play-pause-btn" data-target="vid-90s-rolling-ours">❚❚</button>
+                                <div class="progress-bar-bg" data-target="vid-90s-rolling-ours">
+                                    <div class="progress-hover"></div>
+                                    <div class="progress-bar-fill">
+                                        <div class="progress-handle"></div>
+                                    </div>
+                                    <div class="time-tooltip">00:00</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="prompt-box" id="prompt-90s-rolling">Loading prompt...</div>
+                </div>
+
+                <!-- Controls Bar -->
+                <div class="controls-bar">
+                    <button class="nav-btn prev" onclick="changeSlide('90s', -1)">&#10094;</button>
+                    <div class="dots" id="dots-90s"></div>
+                    <button class="nav-btn next" onclick="changeSlide('90s', 1)">&#10095;</button>
+                </div>
+
+                <div class="baseline-group">
+                    <div class="video-stack">
+                        <div class="video-container">
+                            <div class="video-label">SelfForcing</div>
+                            <video id="vid-90s-self-base" playsinline loop muted autoplay></video>
+                            <div class="custom-controls">
+                                <button class="play-pause-btn" data-target="vid-90s-self-base">❚❚</button>
+                                <div class="progress-bar-bg" data-target="vid-90s-self-base">
+                                    <div class="progress-hover"></div>
+                                    <div class="progress-bar-fill">
+                                        <div class="progress-handle"></div>
+                                    </div>
+                                    <div class="time-tooltip">00:00</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="video-container">
+                            <div class="video-label label-ours">+ TokenTrim</div>
+                            <video id="vid-90s-self-ours" playsinline loop muted autoplay></video>
+                            <div class="custom-controls">
+                                <button class="play-pause-btn" data-target="vid-90s-self-ours">❚❚</button>
+                                <div class="progress-bar-bg" data-target="vid-90s-self-ours">
+                                    <div class="progress-hover"></div>
+                                    <div class="progress-bar-fill">
+                                        <div class="progress-handle"></div>
+                                    </div>
+                                    <div class="time-tooltip">00:00</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="prompt-box" id="prompt-90s-self">Loading prompt...</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="results-section" id="sec-flowmo">
+        <h2 class="section-title">FlowMo vs TokenTrim Comparison</h2>
+        <div class="carousel-wrapper" id="carousel-flowmo">
+            <div class="combined-grid">
+                <div class="baseline-group">
+                    <div class="layout-row-flowmo duration-group-30s">
+                        <div class="side-label-col">
+                            <span class="side-label-text">30s Video<br>Generation</span>
+                        </div>
+                        <div class="content-col">
+                            <div class="video-stack">
+                                <div class="video-container">
+                                    <div class="video-label">FlowMo</div>
+                                    <video id="vid-flowmo-30s-base" playsinline loop muted autoplay></video>
+                                    <div class="custom-controls">
+                                        <button class="play-pause-btn" data-target="vid-flowmo-30s-base">❚❚</button>
+                                        <div class="progress-bar-bg" data-target="vid-flowmo-30s-base">
+                                            <div class="progress-hover"></div>
+                                            <div class="progress-bar-fill">
+                                                <div class="progress-handle"></div>
+                                            </div>
+                                            <div class="time-tooltip">00:00</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="video-container">
+                                    <div class="video-label label-ours">+ TokenTrim</div>
+                                    <video id="vid-flowmo-30s-ours" playsinline loop muted autoplay></video>
+                                    <div class="custom-controls">
+                                        <button class="play-pause-btn" data-target="vid-flowmo-30s-ours">❚❚</button>
+                                        <div class="progress-bar-bg" data-target="vid-flowmo-30s-ours">
+                                            <div class="progress-hover"></div>
+                                            <div class="progress-bar-fill">
+                                                <div class="progress-handle"></div>
+                                            </div>
+                                            <div class="time-tooltip">00:00</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="prompt-box" id="prompt-flowmo-30s">Loading prompt...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controls Bar -->
+                <div class="controls-bar">
+                    <button class="nav-btn prev" onclick="changeSlide('flowmo', -1)">&#10094;</button>
+                    <div class="dots" id="dots-flowmo"></div>
+                    <button class="nav-btn next" onclick="changeSlide('flowmo', 1)">&#10095;</button>
+                </div>
+
+                <div class="baseline-group">
+                    <div class="layout-row-flowmo duration-group-90s">
+                        <div class="side-label-col">
+                            <span class="side-label-text">90s Video<br>Generation</span>
+                        </div>
+                        <div class="content-col">
+                            <div class="video-stack">
+                                <div class="video-container">
+                                    <div class="video-label">FlowMo</div>
+                                    <video id="vid-flowmo-90s-base" playsinline loop muted autoplay></video>
+                                    <div class="custom-controls">
+                                        <button class="play-pause-btn" data-target="vid-flowmo-90s-base">❚❚</button>
+                                        <div class="progress-bar-bg" data-target="vid-flowmo-90s-base">
+                                            <div class="progress-hover"></div>
+                                            <div class="progress-bar-fill">
+                                                <div class="progress-handle"></div>
+                                            </div>
+                                            <div class="time-tooltip">00:00</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="video-container">
+                                    <div class="video-label label-ours">+ TokenTrim</div>
+                                    <video id="vid-flowmo-90s-ours" playsinline loop muted autoplay></video>
+                                    <div class="custom-controls">
+                                        <button class="play-pause-btn" data-target="vid-flowmo-90s-ours">❚❚</button>
+                                        <div class="progress-bar-bg" data-target="vid-flowmo-90s-ours">
+                                            <div class="progress-hover"></div>
+                                            <div class="progress-bar-fill">
+                                                <div class="progress-handle"></div>
+                                            </div>
+                                            <div class="time-tooltip">00:00</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="prompt-box" id="prompt-flowmo-90s">Loading prompt...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <p>&copy; 2026 Token Trim Project Page.</p>
+    </footer>
+
+</div>
+
+<script>
+    // --- Data Configuration ---
+    
+    // Placeholder prompts for each section and baseline type.
+    // Easy to customize: just edit the strings in the arrays below.
+    const promptData = {
+        'hero': [
+            "A helicopter flying over a forest.",
+            "A slime humanoid ripples as it walks",
+            "A llama dances on a stage with disco lights.",
+            "A woman dancing hip hop, street dancing in the studio.",
+            "A robot learning to walk.",
+            "A bright red kite pulling forward against a light blue sky.",
+            "A skeleton dances energetically with exaggerated movements.",
+            "A cloud of white smoke drifting horizontally across a deep navy background.",
+            "A shadow warrior flickers between light sources",
+            "A cat suddenly jumps and lands softly",
+            "Pikachu hopping across rocks near a mountain stream.",
+            "A plush toy jumps down and dusts itself off",
+        ],
+        '30s': {
+            'rolling': [
+                "A humanoid appears out of smoke, then disperses and reforms.",
+                "A liquid silhouette flows forward in humanoid form.",
+                "A glowing wireframe animal fills itself with flesh as it runs.",
+                "A dark frontal shot of a humanoid walking forward",
+                "A ceramic humanoid walks forward.",
+                "A locked-off shot of frost melting off a car windshield.",
+                "A fabric humanoid walks forward with subtle cloth sway.",
+                "A cardboard humanoid walks forward on a light gray floor.",
+            ],
+            'self': [
+                "A young girl skips down a quiet suburban street lined with trees.",
+                "A swarm of identical black birds moving as a single shape across the sky.",
+                "A translucent jellyfish drifting slowly through deep blue water.",
+                "A fabric humanoid made of gray cloth walks forward.",
+                "A fixed camera shot of a lava humanoid walking forward.",
+                "A rolling ocean swell advancing toward the camera.",
+                "A single ice cube resting on a frozen surface.",
+                "A thick oil droplet crawling downward on a vertical glass pane.",
+            ]
+        },
+        '90s': {
+            'rolling': [
+                "A helicopter flying over a forest.",
+                "A woman dancing hip hop, street dancing in the studio.",
+                "A clay humanoid with muted terracotta color walks forward on a dark gray floor.",
+                "Pikachu hopping across rocks near a mountain stream.",
+                "A young girl coloring at her desk.",
+                "A llama dances on a stage with disco lights.",
+                "A hand holding a bright yellow fidget spinner.",
+                "A crystal humanoid with clear facets walks forward on a black reflective floor."
+            ],
+            'self': [
+                "A cloud of white smoke drifting horizontally across a deep navy background.",
+                "A bright red kite pulling forward against a light blue sky.",
+                "A side-view tracking shot of a clay humanoid walking across a neutral studio floor.",
+                "A school of identical silver fish swimming left to right in a shallow turquoise lagoon.",
+                "A slow lateral tracking shot of a white marble figure walking along a straight corridor.",
+                "A stack of identical white plates on a stainless-steel surface.",
+                "A static camera shot of a robotic spider walking straight toward the camera.",
+                "A stone statue with light beige marble texture takes slow steps forward on a flat stone plaza."
+            ]
+        },
+        'flowmo': {
+            '30s': [
+                "Ashborn seated on a throne of shadows, ancient and solemn.",
+                "A wooden mannequin walks forward under soft studio lighting.",
+                "Antares in full dragon form towering over a burning battlefield.",
+                "A static medium shot of a humanoid made of flowing water walking.",
+                "A shadow-only humanoid silhouette walks forward.",
+                "Antares unleashing a dragon’s breath of scarlet fire.",
+                "Ashborn standing in a vast shadow realm, endless soldiers kneeling.",
+                "A biomechanical creature walking.",
+            ],
+            '90s': [
+                "A side-profile shot of a humanoid constructed from stacked books walking forward.",
+                "A dragon lowers its head and spreads its wings.",
+                "A paper cutout character walks sideways flatly.",
+                "Smoke drifts sideways with trailing motion.",
+                "A single person walks down a straight corridor.",
+                "A side-view shot of a sand humanoid walking forward on a flat beige desert surface.",
+                "Minimalist portrait of Sung Jin-Woo, half his face in shadow.",
+                "A balloon animal dog walks forward.",
+            ]
+        }
+    };
+
+
+
+    // Placeholder video paths.
+    // Edit these paths to point to your actual video files.
+    const videoData = {
+        'hero': [
+            "90s/ours/helicopter_ours.mp4",
+            "hero/alien.mp4",
+            "90s/ours/llama_ours.mp4",
+            "90s/ours/dancer_ours.mp4",
+            "hero/robot.mp4",
+            "90s/ours/kite_ours.mp4",
+            "hero/skeleton.mp4",
+            "90s/ours/cloud_ours.mp4",
+            "hero/force.mp4",
+            "hero/cat.mp4",
+            "90s/ours/pikachu_ours.mp4",
+            "hero/puppet2.mp4",
+        ],
+        '30s': {
+            'rolling': {
+                'baseline': [
+                    "30s/rolling/smoke_rolling.mp4",
+                    "30s/rolling/aquaman_rolling.mp4",
+                    "30s/rolling/render_rolling.mp4",
+                    "30s/rolling/robber_rolling.mp4",
+                    "30s/rolling/ceramicman_rolling.mp4",
+                    "30s/rolling/windshield_rolling.mp4",
+                    "30s/rolling/clothman_rolling.mp4",
+                    "30s/rolling/cardboard_rolling.mp4",
+                ],
+                'ours': [
+                    "30s/ours/smoke_ours.mp4",
+                    "30s/ours/aquaman_ours.mp4",
+                    "30s/ours/render_ours.mp4",
+                    "30s/ours/robber_ours.mp4",
+                    "30s/ours/ceramicman_ours.mp4",
+                    "30s/ours/windshield_ours.mp4",
+                    "30s/ours/clothman_ours.mp4",
+                    "30s/ours/cardboard_ours.mp4",
+                ]
+            },
+            'self': {
+                'baseline': [
+                    "30s/self/girl_walking_self.mp4",
+                    "30s/self/birds_self.mp4",
+                    "30s/self/jellyfish_self.mp4",
+                    "30s/self/kanye_self.mp4",
+                    "30s/self/lava_self.mp4",
+                    "30s/self/wave_self.mp4", 
+                    "30s/self/ice_self.mp4",
+                    "30s/self/droplet_self.mp4",
+                ],
+                'ours': [
+                    "30s/ours/girl_walking_ours.mp4",
+                    "30s/ours/birds_ours.mp4",
+                    "30s/ours/jellyfish_ours.mp4",
+                    "30s/ours/kanye_ours.mp4",
+                    "30s/ours/lava_ours.mp4",
+                    "30s/ours/wave_ours.mp4",
+                    "30s/ours/ice_ours.mp4",
+                    "30s/ours/droplet_ours.mp4",
+                ]
+            }
+        },
+        '90s': {
+            'rolling': {
+                'baseline': [
+                    "90s/rolling/helicopter_rolling.mp4",
+                    "90s/rolling/dancer_rolling.mp4",
+                    "90s/rolling/terracotta_rolling.mp4",
+                    "90s/rolling/pikachu_rolling.mp4",
+                    "90s/rolling/pencil_rolling.mp4",
+                    "90s/rolling/llama_rolling.mp4",
+                    "90s/rolling/spinner_rolling.mp4",
+                    "90s/rolling/crystalman_rolling.mp4",
+                ],
+                'ours': [
+                    "90s/ours/helicopter_ours.mp4",
+                    "90s/ours/dancer_ours.mp4",
+                    "90s/ours/terracotta_ours.mp4",
+                    "90s/ours/pikachu_ours.mp4",
+                    "90s/ours/pencil_ours.mp4",
+                    "90s/ours/llama_ours.mp4",
+                    "90s/ours/spinner_ours.mp4",
+                    "90s/ours/crystalman_ours.mp4",
+                ]
+            },
+            'self': {
+                'baseline': [
+                    "90s/self/cloud_self.mp4",
+                    "90s/self/kite_self.mp4",
+                    "90s/self/clegs_self.mp4",
+                    "90s/self/fish_self.mp4",
+                    "90s/self/marble_self.mp4",
+                    "90s/self/plates_self.mp4",
+                    "90s/self/spider_self.mp4",
+                    "90s/self/stone_self.mp4",
+                    "90s/self/volcano_self.mp4",
+                ],
+                'ours': [
+                    "90s/ours/cloud_ours.mp4",
+                    "90s/ours/kite_ours.mp4",
+                    "90s/ours/clegs_ours.mp4",
+                    "90s/ours/fish_ours.mp4",
+                    "90s/ours/marble_ours.mp4",
+                    "90s/ours/plates_ours.mp4",
+                    "90s/ours/spider_ours.mp4",
+                    "90s/ours/stone_ours.mp4",
+                    "90s/ours/volcano_ours.mp4",
+                ]
+            }
+        },
+        'flowmo': {
+            '30s': {
+                'baseline': [
+                    "baselines/30s/flowmo/throne_flowmo.mp4",
+                    "baselines/30s/flowmo/woodman_flowmo.mp4",
+                    "baselines/30s/flowmo/dragon1_flowmo.mp4",
+                    "baselines/30s/flowmo/aquahuman_flowmo.mp4",
+                    "baselines/30s/flowmo/shadow_flowmo.mp4",
+                    "baselines/30s/flowmo/dragon2_flowmo.mp4",
+                    "baselines/30s/flowmo/knight_flowmo.mp4",
+                    "baselines/30s/flowmo/biomechanical_flowmo.mp4",
+                ],
+                'ours': [
+                    "baselines/30s/ours/throne_ours.mp4",
+                    "baselines/30s/ours/woodman_ours.mp4",
+                    "baselines/30s/ours/dragon1_ours.mp4",
+                    "baselines/30s/ours/aquahuman_ours.mp4",
+                    "baselines/30s/ours/shadow_ours.mp4",
+                    "baselines/30s/ours/dragon2_ours.mp4",
+                    "baselines/30s/ours/knight_ours.mp4",
+                    "baselines/30s/ours/biomechanical_ours.mp4",
+
+                ]
+            },
+            '90s': {
+                'baseline': [
+                    "baselines/90s/flowmo/library_flowmo.mp4",
+                    "baselines/90s/flowmo/dragon_flowmo.mp4",
+                    "baselines/90s/flowmo/paperman_flowmo.mp4",
+                    "baselines/90s/flowmo/plato_flowmo.mp4",
+                    "baselines/90s/flowmo/corridor_flowmo.mp4",
+                    "baselines/90s/flowmo/desert_flowmo.mp4",
+                    "baselines/90s/flowmo/anime_flowmo.mp4",
+                    "baselines/90s/flowmo/dog_flowmo.mp4",
+                ],
+                'ours': [
+                    "baselines/90s/ours/library_ours.mp4",
+                    "baselines/90s/ours/dragon_ours.mp4",
+                    "baselines/90s/ours/paperman_ours.mp4",
+                    "baselines/90s/ours/plato_ours.mp4",
+                    "baselines/90s/ours/corridor_ours.mp4",
+                    "baselines/90s/ours/desert_ours.mp4",
+                    "baselines/90s/ours/anime_ours.mp4",
+                    "baselines/90s/ours/dog_ours.mp4",
+                ]
+            }
+        }
+    };
+
+    // Configuration for each section
+    const sectionConfig = {
+        '30s': { count: 8, types: ['rolling', 'self'] },
+        '90s': { count: 8, types: ['rolling', 'self'] },
+        'flowmo': { count: 8, types: ['30s', '90s'] }
+    };
+
+    // State management for each unified carousel
+    const carouselStates = {
+        '30s': { index: 0 },
+        '90s': { index: 0 },
+        'flowmo': { index: 0 }
+    };
+
+    // --- Logic ---
+
+    // Initialize Dots
+    function initDots(sectionId) {
+        const dotsContainer = document.getElementById(`dots-${sectionId}`);
+        if (!dotsContainer) return;
+        
+        dotsContainer.innerHTML = ''; // Clear
+        const count = sectionConfig[sectionId].count;
+        
+        for (let i = 0; i < count; i++) {
+            const dot = document.createElement('div');
+            dot.className = 'dot';
+            dot.onclick = () => jumpToSlide(sectionId, i);
+            dotsContainer.appendChild(dot);
+        }
+    }
+
+    function updateCarouselUI(sectionId) {
+        const state = carouselStates[sectionId];
+        const config = sectionConfig[sectionId];
+        const currentIndex = state.index;
+        
+        // Update Videos for each type in this section
+        config.types.forEach(type => {
+            updateVideoPair(sectionId, type, currentIndex);
+            
+            // Update Prompt
+            const prompt = promptData[sectionId][type][currentIndex];
+            const promptEl = document.getElementById(`prompt-${sectionId}-${type}`);
+            if(promptEl) promptEl.textContent = `${prompt}`;
+        });
+
+        // Update Dots
+        const dotsContainer = document.getElementById(`dots-${sectionId}`);
+        if(dotsContainer) {
+            const dots = dotsContainer.getElementsByClassName('dot');
+            for (let i = 0; i < dots.length; i++) {
+                if (i === currentIndex) {
+                    dots[i].classList.add('active');
+                } else {
+                    dots[i].classList.remove('active');
+                }
+            }
+        }
+    }
+    
+    function updateVideoPair(sectionId, type, currentIndex) {
+        const baseVid = document.getElementById(`vid-${sectionId}-${type}-base`);
+        const oursVid = document.getElementById(`vid-${sectionId}-${type}-ours`);
+        
+        if (!baseVid || !oursVid) return;
+
+        // Retrieve specific paths
+        const baseFilename = videoData[sectionId][type]['baseline'][currentIndex];
+        const oursFilename = videoData[sectionId][type]['ours'][currentIndex];
+
+        // Assign actual paths
+        // Avoid reloading if src is same (optional optimization)
+        if (baseVid.getAttribute('src') !== baseFilename) {
+            baseVid.src = baseFilename;
+            baseVid.play().catch(e => {}); 
+        }
+        if (oursVid.getAttribute('src') !== oursFilename) {
+            oursVid.src = oursFilename;
+            oursVid.play().catch(e => {});
+        }
+    }
+
+    function changeSlide(sectionId, direction) {
+        const state = carouselStates[sectionId];
+        const count = sectionConfig[sectionId].count;
+        // Calculate new index with wrapping
+        state.index = (state.index + direction + count) % count;
+        updateCarouselUI(sectionId);
+    }
+
+    function jumpToSlide(sectionId, index) {
+        const state = carouselStates[sectionId];
+        state.index = index;
+        updateCarouselUI(sectionId);
+    }
+
+    // Initialize all carousels on load
+    document.addEventListener('DOMContentLoaded', () => {
+        Object.keys(carouselStates).forEach(id => {
+            initDots(id);
+            updateCarouselUI(id);
+        });
+
+        // Initialize Hero Grid
+        const heroGrid = document.getElementById('hero-grid');
+        if (heroGrid) {
+            // Use the dedicated hero data
+            const heroVideos = videoData['hero'];
+            const heroPrompts = promptData['hero'];
+            
+            // Limit to 12 or available length
+            const count = Math.min(heroVideos.length, heroPrompts.length, 12);
+            
+            for (let i = 0; i < count; i++) {
+                const src = heroVideos[i];
+                const promptText = heroPrompts[i];
+
+                if (src && promptText) {
+                    const cell = document.createElement('div');
+                    cell.className = 'hero-cell';
+                    
+                    const video = document.createElement('video');
+                    video.src = src;
+                    video.autoplay = true;
+                    video.loop = true;
+                    video.muted = true;
+                    video.playsInline = true;
+                    
+                    const overlay = document.createElement('div');
+                    overlay.className = 'hero-overlay';
+                    
+                    const prompt = document.createElement('div');
+                    prompt.className = 'hero-prompt';
+                    prompt.textContent = promptText; 
+                    
+                    overlay.appendChild(prompt);
+                    cell.appendChild(video);
+                    cell.appendChild(overlay);
+                    heroGrid.appendChild(cell);
+                }
+            }
+        }
+
+        // Initialize custom video controls
+        const allVideoContainers = document.querySelectorAll('.video-container');
+        
+        allVideoContainers.forEach(container => {
+            const video = container.querySelector('video');
+            const playBtn = container.querySelector('.play-pause-btn');
+            const progressBarBg = container.querySelector('.progress-bar-bg');
+            const progressBarFill = container.querySelector('.progress-bar-fill');
+            
+            if (!video || !playBtn || !progressBarBg || !progressBarFill) return;
+
+            // Determine limit based on section ID or specific class structure
+            const is90s = container.closest('#sec-90s') !== null || container.closest('.duration-group-90s') !== null;
+            const limit = is90s ? 90 : 30;
+
+            // Play/Pause Toggle
+            playBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent other clicks
+                if (video.paused) {
+                    video.play();
+                } else {
+                    video.pause();
+                }
+            });
+
+            // Update Play/Pause Icon
+            video.addEventListener('play', () => {
+                playBtn.innerHTML = '&#10074;&#10074;'; // Pause icon
+            });
+            video.addEventListener('pause', () => {
+                playBtn.innerHTML = '&#9654;'; // Play icon
+            });
+
+            // Update Progress Bar & Loop
+            video.addEventListener('timeupdate', () => {
+                // Enforce limit loop
+                if (video.currentTime >= limit) {
+                    video.currentTime = 0;
+                    video.play();
+                }
+
+                // Update bar width
+                const percentage = (video.currentTime / limit) * 100;
+                progressBarFill.style.width = `${Math.min(percentage, 100)}%`;
+            });
+
+            // Scrubbing
+            progressBarBg.addEventListener('click', (e) => {
+                const rect = progressBarBg.getBoundingClientRect();
+                const offsetX = e.clientX - rect.left;
+                const percentage = offsetX / rect.width;
+                
+                // Jump to time
+                const newTime = percentage * limit;
+                video.currentTime = newTime;
+            });
+
+            // Hover Effects (Tooltip & Ghost Bar)
+            progressBarBg.addEventListener('mousemove', (e) => {
+                const rect = progressBarBg.getBoundingClientRect();
+                const offsetX = e.clientX - rect.left;
+                const percentage = Math.max(0, Math.min(1, offsetX / rect.width));
+                
+                // Update Hover Bar
+                const hoverBar = progressBarBg.querySelector('.progress-hover');
+                if (hoverBar) hoverBar.style.width = `${percentage * 100}%`;
+
+                // Update Tooltip
+                const tooltip = progressBarBg.querySelector('.time-tooltip');
+                if (tooltip) {
+                    const time = percentage * limit;
+                    const mins = Math.floor(time / 60);
+                    const secs = Math.floor(time % 60).toString().padStart(2, '0');
+                    tooltip.textContent = `${mins}:${secs}`;
+                    tooltip.style.left = `${percentage * 100}%`;
+                }
+            });
+
+            // Reset Hover on Leave
+            progressBarBg.addEventListener('mouseleave', () => {
+                const hoverBar = progressBarBg.querySelector('.progress-hover');
+                if (hoverBar) hoverBar.style.width = '0%';
+            });
+        });
+    });
+
+</script>
+
+</body>
+</html>
