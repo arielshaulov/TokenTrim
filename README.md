@@ -11,6 +11,9 @@
 
 ## Qualitative Results
 
+> [!NOTE]
+> Videos are shown as low-resolution GIFs due to GitHub file size constraints. For full-resolution videos, visit the <a href="https://arielshaulov.github.io/TokenTrim/">project page</a>.
+
 **Prompt:** *A humanoid appears out of smoke, then disperses and reforms.*
 
 <table>
