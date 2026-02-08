@@ -18,8 +18,8 @@
     <th>+ TokenTrim</th>
   </tr>
   <tr>
-    <td><video src="https://github.com/arielshaulov/TokenTrim/raw/main/assets/videos/smoke_rolling.mp4" width="320" controls></video></td>
-    <td><video src="https://github.com/arielshaulov/TokenTrim/raw/main/assets/videos/smoke_ours.mp4" width="320" controls></video></td>
+    <td><img src="assets/gifs/smoke_rolling.gif" width="320" alt="Rolling Forcing - smoke"></td>
+    <td><img src="assets/gifs/smoke_ours.gif" width="320" alt="TokenTrim - smoke"></td>
   </tr>
 </table>
 
@@ -31,8 +31,8 @@
     <th>+ TokenTrim</th>
   </tr>
   <tr>
-    <td><video src="https://github.com/arielshaulov/TokenTrim/raw/main/assets/videos/girl_walking_self.mp4" width="320" controls></video></td>
-    <td><video src="https://github.com/arielshaulov/TokenTrim/raw/main/assets/videos/girl_walking_ours.mp4" width="320" controls></video></td>
+    <td><img src="assets/gifs/girl_walking_self.gif" width="320" alt="Self Forcing - girl walking"></td>
+    <td><img src="assets/gifs/girl_walking_ours.gif" width="320" alt="TokenTrim - girl walking"></td>
   </tr>
 </table>
 
@@ -44,8 +44,8 @@
     <th>+ TokenTrim</th>
   </tr>
   <tr>
-    <td><video src="https://github.com/arielshaulov/TokenTrim/raw/main/assets/videos/dragon1_flowmo.mp4" width="320" controls></video></td>
-    <td><video src="https://github.com/arielshaulov/TokenTrim/raw/main/assets/videos/dragon1_ours.mp4" width="320" controls></video></td>
+    <td><img src="assets/gifs/dragon1_flowmo.gif" width="320" alt="FlowMo - dragon"></td>
+    <td><img src="assets/gifs/dragon1_ours.gif" width="320" alt="TokenTrim - dragon"></td>
   </tr>
 </table>
 
